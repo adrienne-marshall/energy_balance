@@ -1,3 +1,5 @@
+#Author: Adrienne
+
 #Check out initial data - will probably be unstructured. 
 library(tidyverse); library(reshape2)
 

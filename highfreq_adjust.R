@@ -1,3 +1,5 @@
+##April 12, 2017. Adrienne Marshall.
+
 #Check out high frequency data. 
 
 #Set up.
@@ -43,7 +45,9 @@ dat <- dat %>% select(TIMESTAMP, RECORD, Ux, Uy, Uz, Ts, FW3, h2o_conc)
 
 write_csv(dat, "data/adjusted_highfreq.csv")
 
-
+#------
+dat <- read_csv("data/adjusted_highfreq.csv")
+write_csv(dat, "data/2017-03-01_1857_highfreq-01.csv")
 
 
 
