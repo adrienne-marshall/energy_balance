@@ -11,7 +11,7 @@ home <- "/Volumes/research_storage/energy_balance"
 setwd(home)
 
 #Get data. 
-lowfreq <- read_csv("data/CSV_1073.LowFreqData.dat", col_names = FALSE)
+lowfreq <- read_csv("data/CSV_1073.LowFreqData_Final.dat", col_names = FALSE)
 headers <- read_csv("data/EnergyBalanceHeaders.csv", n_max = 0, col_names = TRUE)
 names(headers) <- str_replace_all(names(headers),"(([[:punct:]])|\\s)","_")
 names(headers) <- str_replace_all(names(headers), "__", "_")
@@ -25,8 +25,53 @@ main <- lowfreq %>% select(year, day_of_year, hhmm, wind_speed_m_s_, fine_wire_t
                            irt_body_c_, contains("rsw"), contains("rlw"))
 main <- main %>% mutate(index = 1:nrow(main))
 
+
+
+soil.storage<-main%>%select(contains("soil_temp"), irt_target_c_)
+
+soilT.1<-main%>%select(contains('soil_temp_1'))
+soilT.2<-main%>%select(contains('soil_temp_2'))
+soilT.3<-main%>%select(contains('soil_temp_3'))
+
+soilT.1<-mutate(soilT.1, ST1.ave = rowSums(soilT.1)/ncol(soilT.1))
+soilT.2<-mutate(soilT.2, ST2.ave = rowSums(soilT.2)/ncol(soilT.2))
+soilT.3<-mutate(soilT.3, ST3.ave = rowSums(soilT.3)/ncol(soilT.3))
+len<-length(soilT.3$soil_temp_3_1_c_)
+# 30 min dT/dt
+delta30.ST.1<-(soilT.1[1:len-1,1:4]-soilT.1[2:len,1:4])*2/3600
+delta30.ST.2<-(soilT.2[1:len-1,1:4]-soilT.2[2:len,1:4])*2/3600
+delta30.ST.3<-(soilT.3[1:len-1,1:4]-soilT.3[2:len,1:4])*2/3600
+delta30.ST<- cbind(delta30.ST.1,delta30.ST.2,delta30.ST.3)
+delta30.ST<- mutate(delta30.ST, delta30.ST.ave = rowSums(delta30.ST)/ncol(delta30.ST))
+
+########### Soil parameters - Table 8.2 - ##############
+p.water <- 1.00 #mg/m^3   density
+p.min <- 2.65 #mg/m^3
+p.o <-1.3  #mg/m^3 fix for KPA 
+
+c.water <- 4.18    #J/gK   specific heat 
+C.min   <- 0.87    #J/gK
+c.o   <- 1.92    #J/gK
+
+k.water <- 0.56+0.0018*(273.15+soilT.3$ST3.ave) #(W/mK) thermal conductivity 
+k.min   <- 2.5 #(W/mK)
+k.o   <- .25#(W/mK)
+
+v.water <- 0.4 # get data !!!!!!!  volumetric  content m^3/m^3
+v.min <- 0.5  
+v.o <- .02
+#soil volumetric heat capacity 
+PsCs <- 0.1e3*(v.min*p.min*C.min + v.water*p.water*c.water + v.o*p.o*c.o) # PsCs [J/m^2C]
+#soil storage
+surf.str.30<-PsCs*delta30.ST$delta30.ST.ave #w/m^2
+
+main <- main %>% mutate(storage = c(NA, surf.str.30))
+main %>% group_by(day_of_year) %>% 
+  summarise(count = n(),
+    daily_storage = sum(storage, na.rm = TRUE))
+
 #Energy balance equation:
-#Rn = G + LE + H 
+#Rn - G - LE - H - dS/dt = 0
 
 plot_dat <- melt(main, id.vars = c("year", "day_of_year", "hhmm", "index"))
 plot_dat <- mutate(plot_dat, time = paste0(day_of_year, "_", hhmm))
@@ -41,6 +86,8 @@ ggplot(plot_dat, aes(x = index, y=value)) +
   geom_line() +
   facet_wrap(~variable, scales = "free") + 
   theme_few()
+
+
   
   
   
