@@ -1,6 +1,7 @@
 #April 24, 2017. Adrienne Marshall.
 
 #Read eddypro outputs. 
+library(tidyverse)
 
 home <- "/Volumes/research_storage/energy_balance"
 setwd(home)
@@ -29,4 +30,4 @@ data <- data %>% mutate(hour = substr(time, 1, 2)) %>%
 
 data <- data %>% select(date_time, H, qc_H, LE, qc_LE)
 
-write_csv(data, "data/eddypro_output_simple.csv")
+write_csv(data, "data/eddypro_output_simple2.csv")
