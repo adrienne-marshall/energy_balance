@@ -1,6 +1,6 @@
-##April 12, 2017. Adrienne Marshall.
+##April 24, 2017. Adrienne Marshall.
 
-#Check out high frequency data. 
+#Prepare high frequency data for use with EddyPro.
 
 #Set up.
 library(tidyverse)
@@ -24,27 +24,31 @@ test_dat <- dat[1:1000,]
 # The data logger code also converts from vapor pressure in kPa to g/m3 with
 # 
 # P14A = 2.16679*((P14Ea*1000))/(FW05+273.15) 
+dat <- dat %>% mutate(ratio = 0.825 - 0.143*rh) %>%
+  mutate(ea_adjust = ratio*ea_kpa) %>%
+  mutate(ea_adjust = ifelse(ea_adjust > 3, NaN, ea_adjust)) %>%
+  mutate(ea_adjust = ifelse(ea_adjust < 0, NaN, ea_adjust))
 
+# 
+# B1 <- -0.001
+# B2 <- 0.1406
+# B3 <- 0.023
+# B4 <- -3.2768
+# dat <- dat %>% mutate(delta = (B1*rh*100 + B2)*fwt_high + (B3*rh*100 + B4)) %>%
+#   mutate(adjusted_RH = rh + delta/100) %>%
+#   mutate(adjusted_RH = ifelse(adjusted_RH > 1, 1, adjusted_RH))
 
-B1 <- -0.001
-B2 <- 0.1406
-B3 <- 0.023
-B4 <- -3.2768
-dat <- dat %>% mutate(delta = (B1*rh*100 + B2)*fwt_high + (B3*rh*100 + B4)) %>%
-  mutate(adjusted_RH = rh + delta/100) %>%
-  mutate(adjusted_RH = ifelse(adjusted_RH > 1, 1, adjusted_RH))
-
-#Calculate es(Ta).
-a <- 0.611
-b <- 17.502
-c <- 240.97
-dat <- dat %>% mutate(es_ta = a*exp((b*fwt_high)/(fwt_high+c)))
-dat <- dat %>% mutate(ea = es_ta*adjusted_RH)
+# #Calculate es(Ta).
+# a <- 0.611
+# b <- 17.502
+# c <- 240.97
+# dat <- dat %>% mutate(es_ta = a*exp((b*fwt_high)/(fwt_high+c)))
+# dat <- dat %>% mutate(ea = es_ta*adjusted_RH)
 
 #Recalculate concentration of water in air. (mmol/m^3)
 Mw <- 18
 R <- 8.314
-dat <- dat %>% mutate(h2o_conc = ea*(1000)*1000/(R*(fwt_high+273.15)))
+dat <- dat %>% mutate(h2o_conc = ea_adjust*(1000)*1000/(R*(fwt_high+273.15)))
 
 #Select only the relevant rows.
 dat <- dat %>% select(year, doy, hhmm, sec, ux, uy, uz, sonic_temp, fwt_high, h2o_conc)
