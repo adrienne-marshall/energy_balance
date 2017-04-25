@@ -11,6 +11,9 @@ library(tidyverse)
 library(reshape2)
 library(ggthemes)
 library(gridExtra)
+library(RColorBrewer)
+library(viridis)
+library(broom)
 
 eh <- read_csv("data/E_H.csv")
 #eh <- read_csv("data/eddypro_output_simple.csv")
@@ -155,15 +158,44 @@ r2 <- "0.9558"
 equation <- paste0("4-Component Rnet = ", slope, "*Rnet + ", int, "\n", 
                    "R2 = ", r2)
 
+lm_eqn <- function(df){
+  m <- lm(rnet_calc ~ rnet, df);
+  eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+                   list(a = format(coef(m)[1], digits = 2), 
+                        b = format(coef(m)[2], digits = 2), 
+                        r2 = format(summary(m)$r.squared, digits = 3)))
+  as.character(as.expression(eq));                 
+}
+
+
 scat <- ggplot(rad, aes(x = rnet, y = rnet_calc)) + 
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm") + 
   theme_few() + 
+  geom_text(x = 0, y = 500, label = lm_eqn(rad), parse = TRUE) +
   #annotate("text", x = 0, y = 500, equation) +
   labs(y = "Rnet from four-component (W/m2)",
-       x = "Rnet from net radiometer (W/m2)")
+       x = "Rnet from net radiometer (W/m2)",
+       title = "(a)")
 scat
 
+#Plot residuals. 
+df <- augment(fit)
+resid <- ggplot(df, aes(x = .fitted, y = .resid)) + 
+  geom_point() +
+  theme_few() +
+  labs(x = "4-component Rnet (W/m2)",
+       y = "Residual (W/m2)",
+       title = "(b)")
+
+
+
+png("R/plots/radiation_scatter.png", width = 9, height = 6, res = 300, units = 'in')
+grid.arrange(scat, resid, nrow = 2, ncol = 1)
+dev.off()
+
+
+#Plot all the radiation components. 
 radl <- melt(rad, id.vars = c("date", "hhmm", "date_time", "doy"))
 radl <- radl %>% mutate(numeric_hour = hour(date_time) + minute(date_time)/60)
 
@@ -185,8 +217,22 @@ rad_hourly <- ggplot(radl,
 radl$doy <- as.numeric(radl$doy)
 
 rad_day <- ggplot(radl, aes(x = numeric_hour, y = value)) +
-  geom_line(aes(color = doy, group = doy)) +
-  facet_grid(variable ~., scales = "free") +
-  theme_few() +
-  theme()
+  geom_line(aes(color = doy, group = doy), show.legend = FALSE) +
+  facet_grid(variable ~., scales = "free", 
+             labeller = as_labeller(c("sw_in" = "SWin",
+                          "sw_out" = "SWout",
+                          "lw_in" = "LWin",
+                          "lw_out" = "LWout",
+                          "rnet" = "Rnet",
+                          "rnet_calc"= "4-comp Rnet"))) +
+  scale_color_distiller(type = "qual", palette = "Accent") +
+  labs(x = "Hour of day",
+       y = "Value (W/m2)")
+rad_day
+  #theme_few() +
+  #theme(panel.grid.major = element_line(color = "grey80"),
+  #      panel.grid.minor = element_line(color = "grey90"))
 
+png("R/plots/radiation_summary.png", width = 9, height = 6, res = 300, units = 'in')
+rad_day
+dev.off()
