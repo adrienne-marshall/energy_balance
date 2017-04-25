@@ -7,13 +7,16 @@ home <- "/Volumes/research_storage/energy_balance"
 setwd(home)
 
 library(lubridate)
+library(tidyverse)
 library(reshape2)
 library(ggthemes)
+library(gridExtra)
 
 eh <- read_csv("data/E_H.csv")
+#eh <- read_csv("data/eddypro_output_simple.csv")
 gsr <- read_csv("data/G_RN_S.csv")
 
-#Add date information to g_s_r.
+#Add date information to gsr.
 gsr <- gsr %>% 
   mutate(date = as.Date(strptime(paste(year, doy), format="%Y %j")))%>% 
   filter(date > "2017-03-31") %>%
@@ -22,35 +25,58 @@ gsr <- gsr %>%
                        paste0("0", hhmm),
                        ifelse(nchar(hhmm)==2,
                               paste0("00",hhmm),
-                              ifelse(nchar(hhmm==1),
-                                     paste0("000",hhmm))))) %>%
+                              ifelse(nchar(hhmm)==1,
+                                     paste0("000",hhmm),
+                                     hhmm)))) %>%
   mutate(hour = substr(hhmm, start = 1, stop = 2)) %>%
   mutate(min = substr(hhmm, start = 3, stop = 4)) %>%
   mutate(date_time = ymd_hm(paste(date, hour, min)))
+gsr <- gsr %>% select(date, hhmm, date_time, everything())
 
-#Make a pared-down gsr.
+
+
+#Make a pared-down gsr and eh.
 gsr_simple <- gsr %>% select(doy, storage, G, rnet, date_time)
-eh_simple <- eh %>% select(start, start_doy, H, lambda_E)
-names(eh_simple)[1] <- "date_time"
-names(eh_simple)[2] <- "doy"
+eh_simple <- eh %>% select(date_time, H, LE) %>%
+  mutate(doy = yday(date_time))
+#eh_simple <- eh %>% select(start, start_doy, H, lambda_E)
+#names(eh_simple) <- c("date_time", "doy", "H", "LE")
 
 data <- full_join(gsr_simple, eh_simple, by = c("date_time", "doy"))
 
+write_csv(data, "data/energy_balance_results.csv")
+
+
 #Make a plot. ---------
 datal <- melt(data, id.vars = c("date_time", "doy"))
-png("R/plots/all_fluxes1.png", width = 9, height = 6, res = 300, units = 'in')
-ggplot(datal, aes(x = date_time, y = value, group = variable, color = variable)) +
+#datal <- datal %>% filter(variable != "lambda_E")
+d <- ggplot(datal, aes(x = date_time, y = value, group = variable, color = variable)) +
   geom_line() + 
-  theme_few()
+  theme_few() +
+  facet_grid(variable~., labeller = as_labeller(c("storage" = "dS/dt",
+                                                  "G" = "G",
+                                                  "rnet" = "Rnet",
+                                                  "H" = "H",
+                                                  "LE" = "LE"))) +
+  labs(y = "Value (W/m2)",
+       x = "Date")
+
+png("R/plots/all_fluxes_spiky.png", width = 9, height = 6, res = 300, units = 'in')
+d
 dev.off()
 
 #Calculate closure at half-hour interval. -------- 
-data <- data %>% mutate(residual = rnet + H + G + lambda_E - storage)
+data <- data %>% mutate(residual = rnet - H - G - LE - storage)
+r <- ggplot(data, aes(x = date_time, y = residual)) + 
+  geom_line(show.legend = TRUE) + 
+  theme_few()
 
 png("R/plots/residual.png", width = 9, height = 6, res = 300, units = 'in')
-ggplot(data, aes(x = date_time, y = residual)) + 
-  geom_line() + 
-  theme_few()
+r
+dev.off()
+
+png("R/plots/data_residual.png", width = 9, height = 6, res = 300, units = 'in')
+grid.arrange(d, r, nrow = 2)
 dev.off()
 
 #Group by day and calculate residual. ---------
@@ -58,38 +84,109 @@ dev.off()
 daily <- data %>% group_by(doy) %>%
   summarise(count = n(),
             storage = sum(storage, na.rm = TRUE),
-            G = sum(G),
+            G = sum(G, na.rm = TRUE),
             rnet = sum(rnet, na.rm = TRUE),
             H = sum(H, na.rm = TRUE),
-            lambda_E = sum(lambda_E, na.rm = TRUE))
-daily <- daily %>% mutate(residual = rnet + H + G + lambda_E - storage)
+            LE = sum(LE, na.rm = TRUE))
+daily <- daily %>% mutate(residual = rnet - H - G - LE - storage)
 dailyl <- melt(daily, id.vars = "doy") %>% filter(!variable %in%  c("count"))
 
 #Make plots.
 
-png("R/plots/daily_fluxes.png", width = 9, height = 6, res = 300, units = 'in')
-ggplot(dailyl, aes(x = doy, y = value, group = variable, color = variable)) +
+plot_dat <- dailyl %>% filter(variable != "residual")
+d <- ggplot(plot_dat, aes(x = doy, y = value, group = variable, color = variable)) +
   geom_line() + 
   theme_few() +
   labs(x = "Day of year",
        y = "Value (W/m2)")
+png("R/plots/daily_fluxes.png", width = 9, height = 6, res = 300, units = 'in')
+d
 dev.off()
 
+plot_dat <- dailyl %>% filter(variable == "residual")
+r <- ggplot(plot_dat, aes(x = doy, y = value, color = variable)) +
+  geom_line(show.legend = TRUE) + 
+  theme_few() +
+  labs(x = "Day of year",
+       y = "Residual (W/m2)")
+
+png("R/plots/daily_fluxes_residual.png", 
+    width = 9, height = 6, res = 300, units = 'in')
+grid.arrange(d, r, nrow = 2)
+dev.off()
+
+#Now calculate over the whole period. -----
+entire <- data %>% select(doy, date_time, everything())
+summary <- sapply()
+
+
 #Next steps: think about whether directions are correct!!
+#Consider taking out rainy days? Might the rain interfere with hygrometer?
 #And see how well rnet matches LW and SW in and out.
 
 #Try choosing one day.
-one_day <- datal %>% filter(doy == "104") %>%
+one_day <- datal %>% filter(doy == "98") %>%
   arrange(date_time, variable)
+
 ggplot(one_day, aes(x = date_time, y = value, group = variable, color = variable)) +
   geom_line() + 
   theme_few() +
   labs(x = "Hour",
        y = "Value (W/m2)")
 
+#Get sums over the shole period. -------
+data <- data %>% select(date_time, everything())
+sapply(data[,3:8], sum, na.rm = TRUE)/length(unique(data$doy))
 
+#Make a plot: time of day and net radiation (or incoming solar).
 
+#Compare Rnet and four-component. 
+gsr <- gsr %>% mutate(rnet_calc = sw_in + lw_in - sw_out - low_out)
 
+rad <- gsr %>% 
+  select(date, hhmm, date_time, doy, sw_in, lw_in, sw_out, low_out, rnet, rnet_calc)
 
+names(rad)[names(rad) == "low_out"] <- "lw_out"
 
+fit <- lm(rnet_calc ~ rnet, data = rad)
+slope <- fit$coefficient[2]
+int <- fit$coefficient[1]
+r2 <- "0.9558"
+equation <- paste0("4-Component Rnet = ", slope, "*Rnet + ", int, "\n", 
+                   "R2 = ", r2)
+
+scat <- ggplot(rad, aes(x = rnet, y = rnet_calc)) + 
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") + 
+  theme_few() + 
+  #annotate("text", x = 0, y = 500, equation) +
+  labs(y = "Rnet from four-component (W/m2)",
+       x = "Rnet from net radiometer (W/m2)")
+scat
+
+radl <- melt(rad, id.vars = c("date", "hhmm", "date_time", "doy"))
+radl <- radl %>% mutate(numeric_hour = hour(date_time) + minute(date_time)/60)
+
+rad_plot <- ggplot(radl, aes(x = date_time, y = value, color = variable)) +
+  geom_line() +
+  theme_few()
+rad_plot
+
+rad_hourly <- ggplot(radl, 
+                     aes(x = numeric_hour,
+                         y = value, 
+                         color = variable)) +
+  geom_smooth(se = FALSE) + 
+  geom_point() +
+  #geom_line() +
+  facet_grid(variable ~. , scales = "free") +
+  theme_few()
+
+radl$doy <- as.numeric(radl$doy)
+
+rad_day <- ggplot(radl, aes(x = numeric_hour, y = value)) +
+  geom_line(aes(color = doy, group = doy)) +
+  facet_grid(variable ~., scales = "free") +
+  theme_few() +
+  theme()
 

@@ -30,17 +30,33 @@ high[high == -7999] <- NaN
 high <- high %>% 
   mutate(date = as.Date(strptime(paste(year, doy), format="%Y %j")))
 
-#Start and end on full days. ------
-high <- high %>% filter(date > "2017-03-31") %>%
-  filter(date < "2017-04-18")
 
+
+# test <- test %>% mutate(b = ifelse(nchar(a) == 3,
+#                                          paste0("0", a),
+#                                          ifelse(nchar(a) == 2,
+#                                                 paste0("00", a),
+#                                                 ifelse(nchar(a)== 1,
+#                                                       paste0("000", a),
+#                                                       a
+#                                                       ))))
+#Add zeros to hhmm as needed. 
 high <- high %>% 
   mutate(hhmm = ifelse(nchar(hhmm)==3, 
                        paste0("0", hhmm),
                        ifelse(nchar(hhmm)==2,
                               paste0("00",hhmm),
-                              ifelse(nchar(hhmm==1),
-                                     paste0("000",hhmm))))) %>%
+                              ifelse(nchar(hhmm)==1,
+                                     paste0("000",hhmm),
+                                     hhmm))))
+unique(high$hhmm)
+
+#Start and end on full days. ------
+high <- high %>% filter(date > "2017-03-31") %>%
+  filter(date < "2017-04-18")
+
+#Make a date. -----
+high <- high %>%
   mutate(hour = substr(hhmm, start = 1, stop = 2)) %>%
   mutate(min = substr(hhmm, start = 3, stop = 4)) %>%
   mutate(date_time = ymd_hms(paste(date, hour, min, sec)))
@@ -81,6 +97,20 @@ high <- high %>% mutate(ea_new = es_ta*adjusted_RH)
 
 #high <- high %>% select(interval, sec, ux, uy, uz,, fwt_high, ea)
 
+#Try calculating covariance - not separating out calculations for means. --------
+#Answer from this method seems wrong...
+# covariance <- high %>% group_by(interval) %>%
+#   summarize(cov_ea = cov(x = uz, y = ea_new, use = "pairwise.complete.obs"),
+#             cov_h = cov(x = uz, y = fwt_high, use = "pairwise.complete.obs"),
+#             rho_a = mean(rho_a)) 
+# ans1 <- covariance %>% mutate(H = rho_a*cp*cov_h) %>%
+#   mutate(E = rho_a*cov_ea) %>%
+#   mutate(lambda_E = E*40.8*1000)
+# 
+# ans1$lambda_E[ans1$lambda_E > 2000] <- NaN
+# ans1$lambda_E[ans1$lambda_E < -2000] <- NaN
+# ggplot(ans1, aes(x = interval, y = lambda_E)) + geom_line()
+
 #Calculate means so we can get fluctuations about the mean.-------
 means <- high %>% group_by(interval) %>%
   summarise(mean_ux = mean(ux, na.rm = TRUE),
@@ -106,7 +136,8 @@ high <- high %>% mutate(wT = uz_prime*temp_prime) %>%
 #Might be better to do better quality control than this?
 ans <- high %>% group_by(interval) %>%
   summarise(mean_wT = mean(wT, na.rm = TRUE),
-            mean_wc = mean(wc, na.rm = TRUE))
+            mean_wc = mean(wc, na.rm = TRUE),
+            rho_a = mean(rho_a, na.rm = TRUE))
 
 #Multiply by constants to get fluxes.
 #Units for H: W/m^2(?), and for E: mol/s m^2
@@ -114,7 +145,7 @@ ans <- ans %>% mutate(H = rho_a*cp*mean_wT) %>%
   mutate(E = rho_a*mean_wc)
 
 
-ans <- ans %>% mutate(lambda_E = E*44*1000)
+ans <- ans %>% mutate(lambda_E = E*40.8*1000)
 
 #E seems to get unreasonably large and is spiky. Constrain it to less than 1000W/m2.
 ans$lambda_E[ans$lambda_E > 1000] <- NaN
@@ -132,10 +163,12 @@ dat_concise <- dat %>% group_by(interval) %>%
             end = tail(date_time, 1),
             H = mean(H),
             lambda_E = mean(lambda_E))
-dat_concise <- dat_concise %>% mutate(start_dt = paste0(start_doy, "-", start))
 
 quartz()
-ggplot(dat_concise, aes(x = start, y = H)) + geom_line() 
+ggplot(dat_concise, aes(x = start, y = lambda_E)) + geom_line() 
 
-dat_concise <- dat_concise %>% mutate(time = ifelse(end>start, end - start, NaN))
+#dat_concise <- dat_concise %>% mutate(time = ifelse(end>start, end - start, NaN))
+
+#Write a csv.
+write_csv(dat_concise, "data/E_H.csv", col_names = TRUE)
 

@@ -55,7 +55,7 @@ k.water <- 0.56+0.0018*(273.15+soilT.3$ST3.ave) #(W/mK) thermal conductivity
 k.min   <- 2.5 #(W/mK)
 k.o   <- .25#(W/mK)
 
-v.water <- 0.2 # get data !!!!!!!  volumetric  content m^3/m^3
+v.water <- 0.4 # get data !!!!!!!  volumetric  content m^3/m^3
 v.min <- 0.5  
 v.o <- .02
 #soil volumetric heat capacity 
@@ -69,6 +69,8 @@ main <- main %>% mutate(storage = c(NA, surf.str.30))
 main %>% group_by(day_of_year) %>% 
   summarise(count = n(),
     daily_storage = sum(storage, na.rm = TRUE))
+
+
 
 plot_dat <- melt(main, id.vars = c("year", "day_of_year", "hhmm", "index"))
 plot_dat <- mutate(plot_dat, time = paste0(day_of_year, "_", hhmm))
@@ -87,7 +89,19 @@ ggplot(plot_dat, aes(x = index, y=value)) +
 #Energy balance equation:
 #Rn - G - LE - H - dS/dt = 0
 
+#Take a mean of the soil heat flux plates.
+main <- cbind(main, G = rowMeans(main[,c("soil_heat_flux_1_w_m2_",
+                                         "soil_heat_flux_2_w_m2_",  
+                                         "soil_heat_flux_3_w_m2_")]))
 
+
+#make a csv for export.
+dat_out <- main %>% select(year, day_of_year, hhmm, storage, G, rsw_in_w_m2_,
+                           rsw_out_w_m2_, rlw_in_w_m2_, rlw_out_w_m2_, net_radiation_w_m2_)
+names(dat_out)[6:10] <- c("sw_in", "sw_out", "lw_in", "low_out", "rnet")
+names(dat_out)[2] <- "doy"
+
+write_csv(dat_out, "data/G_RN_S.csv", col_names = TRUE)
   
   
   

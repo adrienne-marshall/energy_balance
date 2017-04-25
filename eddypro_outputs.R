@@ -1,4 +1,4 @@
-#April 12, 2017. Adrienne Marshall.
+#April 24, 2017. Adrienne Marshall.
 
 #Read eddypro outputs. 
 
@@ -9,14 +9,24 @@ files <- list.files("data/eddypro_outputs")
 
 files <- files[grepl(".csv", files)]
 
-essentials <- files[grepl("essentials",files)]
-essentials <- read.csv(paste0("data/eddypro_outputs/", essentials),
-                       skip = 1)
+#Get the file with "essentials" in the title.
+full <- files[grepl("full_output",files)]
+full_dat <- read.csv(paste0("data/eddypro_outputs/", full),
+                       skip = 1,
+                     stringsAsFactors = FALSE)
+full_dat <- full_dat[-1,]
+full_dat[full_dat == "-9999.0"] <- NaN
 
-# data <- list()
-# for(i in 1:length(files)) {
-#   data[[i]] <- read_csv(paste0("data/eddypro_outputs/", files[i]),
-#                         skip = 18,
-#                         na = "-6999")
-# }
 
+data <- full_dat %>% select(date, time, H, qc_H, LE, qc_LE)
+
+
+#Fix date-time.
+data <- data %>% mutate(hour = substr(time, 1, 2)) %>%
+  mutate(min = substr(time, 4, 5)) %>%
+  mutate(sec = 0) %>%
+  mutate(date_time = ymd_hms(paste(date, hour, min, sec)))
+
+data <- data %>% select(date_time, H, qc_H, LE, qc_LE)
+
+write_csv(data, "data/eddypro_output_simple.csv")
