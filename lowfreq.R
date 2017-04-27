@@ -25,6 +25,24 @@ main <- lowfreq %>% select(year, day_of_year, hhmm, wind_speed_m_s_, fine_wire_t
                            irt_body_c_, contains("rsw"), contains("rlw"))
 main <- main %>% mutate(index = 1:nrow(main))
 
+##Precip module: ---------
+precip <- main %>% select(day_of_year, hhmm, atmos41_precip_mm_, rsw_in_w_m2_)
+precip <- precip %>%   
+  mutate(date = as.Date(strptime(paste("2017", day_of_year), format="%Y %j")))
+daily_precip <- precip %>% group_by(date) %>% 
+  summarise(precip = sum(atmos41_precip_mm_, na.rm = TRUE),
+            solar = mean(rsw_in_w_m2_)) %>%
+  filter(date>= "2017-04-01") %>%
+  filter(date<= "2017-04-18")
+
+ggplot(daily_precip, aes(x = date, y = solar)) + geom_line()
+
+#define rainy and non-rainy days.
+daily_precip <- daily_precip %>% mutate(class = ifelse(solar>150, "sunny", "cloudy")) %>%
+  select(-precip)
+
+write_csv(daily_precip, "data/daily_solar.csv")
+
 ########### soil storage module -----------
 soil.storage<-main%>%select(contains("soil_temp"), irt_target_c_)
 
@@ -85,6 +103,13 @@ ggplot(plot_dat, aes(x = index, y=value)) +
   geom_line() +
   facet_wrap(~variable, scales = "free") + 
   theme_few()
+
+soil <- plot_dat %>% filter(variable %in% c("soil_heat_flux_1_w_m2_", "soil_heat_flux_2_w_m2_", "soil_heat_flux_3_w_m2_"))
+ggplot(soil, aes(x = index, y=value, color = variable)) +
+  geom_line() +
+  #facet_wrap(~variable, scales = "free") + 
+  theme_few()
+
 
 #Energy balance equation:
 #Rn - G - LE - H - dS/dt = 0
