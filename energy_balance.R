@@ -21,6 +21,10 @@ eh <- read_csv("data/eddypro_output_simple2.csv")
 gsr <- read_csv("data/G_RN_S.csv")
 penman <- read_csv("data/Energy_balance_result_Penman-montieth.csv")
 sunny <- read_csv("data/daily_solar.csv")
+storage <- read_csv("data/storage.csv")
+
+#Use storage from Ames' script (lowfreqww)
+gsr$storage <- storage$storage
 
 #Add date information to gsr. ------
 gsr <- gsr %>% 

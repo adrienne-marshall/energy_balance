@@ -58,10 +58,13 @@ cm15_moist<-rowSums(cm15)/ncol(cm15)
 cm25<-data.frame(VWC2$G2.25_moist)
 cm25_moist<-cm25[32:831,]
 
+png("R/plots/soil_moisture.png", width = 9, height = 9, res = 300, units = 'in')
 par(mfrow=c(3,1)) 
 plot(julian,cm5_moist,type='l', xlab= 'Julian Day', ylab ='VWC @ 5cm')                   ### comparison of VWC with depth 
 plot(julian,cm15_moist,type='l',xlab= 'Julian Day', ylab ='VWC @ 15cm')                  ### and vs precip; effects drop with depth or saturatation
 plot(julian,cm25_moist,type='l',xlab= 'Julian Day', ylab ='VWC @ 25cm')
+dev.off()
+
 par(mfrow=c(1,1))
 plot(julian,main$atmos41_precip_mm_[1:800],type='l',col='blue',xlab = 'Julian Day', ylab = 'precipitation (mm)',title('Precipitation'))
 
@@ -73,6 +76,8 @@ cm5_st<-(cm5_moist[2:800]-cm5_moist[1:(800-1)])*100 #convert to mm per 30min
 cm15_st<-(cm15_moist[2:800]-cm15_moist[1:(800-1)])*100 #convert to mm per 30min
 cm25_st<-(cm25_moist[2:800]-cm25_moist[1:(800-1)])*100 #convert to mm per 30min
 Julian2  = julian[1:length(cm5_st)]
+
+
 par(mfrow=c(3,1)) 
 plot(Julian2,cm5_st,type='l',col='blue', xlab= 'Julian Day', ylab ='detla S (mm/m^2)')  ### plots of change in storage
 plot(Julian2,cm15_st,type='l',col='blue', xlab= 'Julian Day', ylab ='detla S (mm/m^2)')
@@ -155,6 +160,8 @@ ggplot(plot_dat, aes(x = index, y=value)) +
 #Energy balance equation:
 #Rn - G - LE - H - dS/dt = 0
 
+storage <- main %>% select(day_of_year, hhmm, storage)
+write_csv(storage, "data/storage.csv")
 
   
   
